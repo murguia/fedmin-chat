@@ -27,6 +27,10 @@ yarn-error.log*
 
 # local env files
 .env*.local
+.env
+
+# data files (fetched locally)
+/data/*.json
 
 # vercel
 .vercel
