@@ -306,10 +306,10 @@ export default function Chat() {
   ];
 
   return (
-    <div className={`flex flex-col max-w-4xl mx-auto ${messages.length === 0 ? '' : 'h-[calc(100vh-8rem)] md:h-[calc(100vh-12rem)]'}`}>
-      <div className={`overflow-y-auto px-4 py-2 md:py-6 ${messages.length === 0 ? '' : 'flex-1'}`}>
+    <div className="flex flex-col h-[calc(100vh-8rem)] md:h-[calc(100vh-12rem)] max-w-4xl mx-auto">
+      <div className="flex-1 overflow-y-auto px-4 py-2 md:py-6">
         {messages.length === 0 ? (
-          <div className="text-center py-2 md:py-12">
+          <div className="text-center flex flex-col items-center justify-center h-full">
             <h2 className="text-xl md:text-2xl font-semibold text-slate-200 mb-1 md:mb-4">
               Ask about Fed Minutes (1967-1973)
             </h2>
