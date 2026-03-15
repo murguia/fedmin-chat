@@ -303,7 +303,7 @@ export default function Chat() {
   const sampleQuestions = [
     'How did the Fed respond to the Nixon Shock in August 1971?',
     'What were concerns about inflation in 1972?',
-    'Who attended the emergency meetings in 1971?',
+    'What were the key policy debates in the early 1970s?',
     'What decisions were made about interest rates in 1970?',
   ];
 
