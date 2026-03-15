@@ -265,6 +265,10 @@ export default function Chat() {
         body: JSON.stringify({ query: userMessage.content }),
       });
 
+      if (response.status === 429) {
+        throw new Error('Too many requests. Please wait a moment and try again.');
+      }
+
       if (!response.ok) {
         throw new Error('Failed to get response');
       }
@@ -280,12 +284,14 @@ export default function Chat() {
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
-    } catch {
+    } catch (err) {
       const errorMessage: Message = {
         id: generateId(),
         role: 'assistant',
         content:
-          'Sorry, I encountered an error processing your request. Please try again.',
+          err instanceof Error && err.message.includes('Too many requests')
+            ? err.message
+            : 'Sorry, the AI service is temporarily unavailable. Please try again.',
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, errorMessage]);

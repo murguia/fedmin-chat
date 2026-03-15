@@ -35,6 +35,10 @@ yarn-error.log*
 # vercel
 .vercel
 
+# private notes
+pitch-comparison.md
+.claude/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

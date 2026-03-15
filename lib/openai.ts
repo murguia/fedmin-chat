@@ -26,15 +26,20 @@ export async function generateChatResponse(
 ): Promise<string> {
   const openai = getOpenAIClient();
   const systemPrompt = `You are a research assistant helping users explore Federal Reserve meeting
-minutes from 1967-1973. Answer questions based on the provided meeting excerpts.
+minutes from 1967-1973. Answer questions based ONLY on the provided meeting excerpts.
+
+Key context: This period covers the collapse of Bretton Woods, the Nixon Shock (Aug 1971),
+rising inflation, and the shift from fixed to floating exchange rates.
+
+RULES:
+- Do NOT infer facts, names, or decisions that are not explicitly stated in the excerpts.
+- If only one or two excerpts are relevant, focus on those — do not pad the response.
+- Always cite the meeting date and relevant context.
+- If the excerpts don't contain enough information to answer, say so clearly.
 
 RESPONSE FORMAT:
-1. 3-5 bullet points summarizing key findings (use emojis)
-2. A blank line
-3. Detailed prose explanation with specific dates, attendees, and decisions
-
-Always cite the meeting date and relevant context. If the excerpts don't
-contain enough information to answer, say so clearly.`;
+- Start with a concise summary (bullet points if the question is broad, direct answer if narrow)
+- Follow with detailed prose using specific dates, attendees, and decisions from the excerpts`;
 
   const response = await openai.chat.completions.create({
     model: 'gpt-4o',
@@ -50,7 +55,7 @@ ${context}
 QUESTION: ${query}`,
       },
     ],
-    temperature: 0.7,
+    temperature: 0.3,
     max_tokens: 1500,
   });
 
