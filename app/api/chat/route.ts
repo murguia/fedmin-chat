@@ -1,10 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateEmbedding, generateChatResponse } from '@/lib/openai';
 import { queryPinecone } from '@/lib/pinecone';
+import { rateLimit } from '@/lib/rate-limit';
 import type { ChatRequest, ChatResponse, Citation } from '@/types';
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit by IP
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+    const { allowed, remaining } = rateLimit(ip);
+
+    if (!allowed) {
+      return NextResponse.json(
+        { error: 'Too many requests. Please wait a moment and try again.' },
+        {
+          status: 429,
+          headers: { 'X-RateLimit-Remaining': remaining.toString() },
+        }
+      );
+    }
+
     const body: ChatRequest = await request.json();
     const { query } = body;
 

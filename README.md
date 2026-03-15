@@ -1,56 +1,73 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Fed Minutes Chat
+
+A conversational AI interface for exploring Federal Reserve meeting minutes from 1967–1973. Ask natural language questions about monetary policy, economic conditions, and Fed decision-making during one of the most pivotal eras in modern economic history — covering the collapse of Bretton Woods, the Nixon Shock, rising inflation, and the shift from fixed to floating exchange rates.
+
+Unlike traditional keyword search, this app uses **semantic search** (vector embeddings) to find relevant passages by meaning, then synthesizes answers with citations using GPT-4o.
+
+## How It Works
+
+1. **User asks a question** in natural language
+2. **Semantic search** converts the query to a vector embedding and finds the most relevant meeting excerpts in Pinecone
+3. **GPT-4o** synthesizes an answer grounded in the retrieved excerpts
+4. **Citations** are displayed with meeting dates, attendees, relevance scores, and expandable source text
+
+## Tech Stack
+
+- **Frontend:** Next.js 14 (App Router), React 18, TypeScript, Tailwind CSS
+- **Embeddings:** OpenAI text-embedding-ada-002 (1536 dimensions)
+- **Vector DB:** Pinecone (serverless, cosine similarity)
+- **LLM:** GPT-4o with grounding constraints to prevent hallucination
+- **Deployment:** Vercel
+
+## Data Pipeline
+
+The ingestion pipeline (`scripts/ingest.ts`) processes meeting data through:
+
+1. **Chunking** — splits meeting text on sentence boundaries using tiktoken (500-token chunks, 50-token overlap)
+2. **Embedding** — generates vector embeddings via OpenAI in batches of 100
+3. **Upserting** — stores chunks with metadata (date, attendees, topics) in Pinecone
+
+```bash
+npm run fetch-data       # Download meeting data
+npm run setup-pinecone   # Create Pinecone index
+npm run ingest           # Run full pipeline
+npm run ingest:dry-run   # Test without API calls
+```
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
+# Install dependencies
+npm install
+
+# Set up environment variables
+cp .env.example .env
+# Add your OPENAI_API_KEY and PINECONE_API_KEY
+
+# Run the data pipeline (if starting fresh)
+npm run fetch-data
+npm run setup-pinecone
+npm run ingest
+
+# Start the dev server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) to start asking questions.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Companion Project
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
-
-## Comparison with FedMinutes
-
-This project is a companion to [FedMinutes](https://github.com/murguia/FedMinutes). They're quite different:
+This project is the consumer-facing counterpart to [FedMinutes](https://github.com/murguia/FedMinutes), a Python research backend with Jupyter notebooks for deep analysis and report generation.
 
 | Aspect | FedMinutes | fedmin-chat |
 |--------|-----------|-------------|
 | Type | Python backend + Jupyter notebooks | Next.js web app |
 | Interface | Notebooks for researchers | Chat UI for end users |
-| Output | Academic reports (HTML/PDF) | Conversational responses |
-| Interaction | Run cells, view dataframes | Type questions, get answers |
-| Deployment | Local/research use | Vercel/web deployment |
+| Embeddings | all-MiniLM-L6-v2 (local, 384d) | OpenAI ada-002 (API, 1536d) |
+| Vector DB | ChromaDB (local) | Pinecone (serverless) |
+| Output | Academic reports (HTML/PDF) | Conversational responses with citations |
+| Deployment | Local/research use | Vercel |
 
-**FedMinutes** is a research tool - you run notebooks, execute semantic searches, generate formal reports with citations and timelines. It's designed for deep analysis.
+## Data Attribution
 
-**fedmin-chat** is a consumer-facing chat app - users ask questions in plain English and get conversational answers with collapsible source citations. It's built on the same underlying data but optimized for quick Q&A.
-
-They complement each other:
-- Use FedMinutes for serious research and report generation
-- Use fedmin-chat for quick lookups and sharing with others who don't want to run notebooks
+The Federal Reserve meeting minutes used in this project were obtained via a Freedom of Information Act (FOIA) request by [Crisis Notes / Nathan Tankus](https://www.crisesnotes.com/database/). These approximately 30,000 pages of historical documents span 1967–1973 and cover over 1,100 meetings.
