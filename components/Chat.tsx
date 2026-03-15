@@ -309,11 +309,11 @@ export default function Chat() {
     <div className="flex flex-col h-[calc(100vh-12rem)] max-w-4xl mx-auto">
       <div className="flex-1 overflow-y-auto px-4 py-6">
         {messages.length === 0 ? (
-          <div className="text-center py-12">
-            <h2 className="text-2xl font-semibold text-slate-200 mb-4">
+          <div className="text-center py-4 md:py-12">
+            <h2 className="text-2xl font-semibold text-slate-200 mb-2 md:mb-4">
               Ask about Fed Minutes (1967-1973)
             </h2>
-            <p className="text-slate-400 mb-8 max-w-lg mx-auto">
+            <p className="text-slate-400 mb-4 md:mb-8 max-w-lg mx-auto">
               Explore Federal Reserve meeting minutes from a pivotal era in
               monetary policy history. Ask about policy decisions, economic
               conditions, or specific events.
