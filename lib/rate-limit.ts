@@ -11,11 +11,11 @@ function cleanup() {
   const now = Date.now();
   if (now - lastCleanup < CLEANUP_INTERVAL_MS) return;
   lastCleanup = now;
-  for (const [key, value] of requests) {
+  requests.forEach((value, key) => {
     if (now > value.resetTime) {
       requests.delete(key);
     }
-  }
+  });
 }
 
 export function rateLimit(ip: string): { allowed: boolean; remaining: number } {
