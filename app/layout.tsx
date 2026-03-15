@@ -22,9 +22,8 @@ export const metadata: Metadata = {
     description:
       'AI-powered semantic search over 30,000 pages of Federal Reserve meeting minutes (1967-1973). Ask questions about the Nixon Shock, Bretton Woods, and monetary policy.',
     type: 'website',
-    // TODO: Update with your Vercel domain
-    // url: 'https://fedmin-chat.vercel.app',
-    // TODO: Add a screenshot or preview image
+    url: 'https://fedmin-chat.vercel.app',
+    // TODO: Add a screenshot or preview image (1200x630px) as public/og-image.png
     // images: [{ url: '/og-image.png', width: 1200, height: 630 }],
   },
   twitter: {
