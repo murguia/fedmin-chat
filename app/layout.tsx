@@ -18,18 +18,18 @@ export const metadata: Metadata = {
   description:
     'Explore Federal Reserve meeting minutes from 1967-1973 using AI-powered semantic search. Ask questions about the Nixon Shock, Bretton Woods collapse, and Fed policy decisions.',
   openGraph: {
-    title: 'Fed Minutes Chat',
+    title: 'Fed Minutes Chat — AI Search Over Historical Fed Meeting Minutes',
     description:
-      'AI-powered semantic search over 30,000 pages of Federal Reserve meeting minutes (1967-1973). Ask questions about the Nixon Shock, Bretton Woods, and monetary policy.',
+      'Semantic search over 30,000 pages of Federal Reserve meeting minutes (1967-1973). Explore the Nixon Shock, Bretton Woods, and more.',
     type: 'website',
     url: 'https://fedmin-chat.vercel.app',
-    images: [{ url: '/og-image.png', width: 1989, height: 1118 }],
+    images: [{ url: '/og-image.png', width: 1200, height: 630 }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Fed Minutes Chat',
+    title: 'Fed Minutes Chat — AI Search Over Historical Fed Meeting Minutes',
     description:
-      'AI-powered semantic search over 30,000 pages of Federal Reserve meeting minutes (1967-1973).',
+      'Semantic search over 30,000 pages of Federal Reserve meeting minutes (1967-1973). Explore the Nixon Shock, Bretton Woods, and more.',
   },
 };
 
