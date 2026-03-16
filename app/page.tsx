@@ -42,8 +42,8 @@ export default function Home() {
       <footer className="border-t border-slate-800 py-4">
         <div className="max-w-4xl mx-auto px-4 text-center text-sm text-slate-500">
           <p>
-            Powered by AI semantic search over historical Federal Reserve meeting minutes
-            obtained via FOIA by{' '}
+            Powered by AI semantic search over Federal Reserve Board of Governors
+            meeting minutes (never previously public) obtained via FOIA by{' '}
             <a
               href="https://www.crisesnotes.com/database/"
               target="_blank"

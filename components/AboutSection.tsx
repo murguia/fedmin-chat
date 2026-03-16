@@ -94,17 +94,19 @@ function AboutModal({ onClose }: { onClose: () => void }) {
             <div className="border-t border-slate-700 pt-4">
               <h3 className="text-slate-200 font-medium mb-2">Data source</h3>
               <p>
-                Approximately 30,000 pages of meeting minutes obtained via FOIA
-                by{' '}
+                These are <span className="text-slate-200">Board of Governors</span> meeting
+                minutes &mdash; distinct from the commonly released FOMC transcripts. Before
+                this FOIA request, these minutes had never been made public.
+                Approximately 30,000 pages were obtained by{' '}
                 <a
-                  href="https://www.crisesnotes.com/database/"
+                  href="https://www.crisesnotes.com/here-are-the-30-000-pages-of-federal-reserve-board-meeting-minutes-i-got-through-foia/"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-emerald-400 hover:text-emerald-300 underline"
                 >
                   Crisis Notes / Nathan Tankus
-                </a>
-                .
+                </a>{' '}
+                via FOIA.
               </p>
             </div>
 

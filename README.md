@@ -70,4 +70,8 @@ This project is the consumer-facing counterpart to [FedMinutes](https://github.c
 
 ## Data Attribution
 
-The Federal Reserve meeting minutes used in this project were obtained via a Freedom of Information Act (FOIA) request by [Crisis Notes / Nathan Tankus](https://www.crisesnotes.com/database/). These approximately 30,000 pages of historical documents span 1967–1973 and cover over 1,100 meetings.
+The documents in this project are **Federal Reserve Board of Governors meeting minutes** — distinct from the more commonly known FOMC transcripts. While FOMC transcripts are released after 5 years, Board of Governors minutes had never been publicly released; the most recent public ones dated to December 1966 before this FOIA request.
+
+These approximately 30,000 pages were obtained via a Freedom of Information Act (FOIA) request by [Crisis Notes / Nathan Tankus](https://www.crisesnotes.com/database/), spanning 1967–1973 and covering over 1,100 meetings. The documents reveal previously unknown institutional decisions, including how the Fed nearly repealed its own emergency lending powers in 1967 and came close to bailing out the savings and loan industry in 1973.
+
+Read more: [Here Are The 30,000 Pages of Federal Reserve Board Meeting Minutes I Got Through FOIA](https://www.crisesnotes.com/here-are-the-30-000-pages-of-federal-reserve-board-meeting-minutes-i-got-through-foia/)
