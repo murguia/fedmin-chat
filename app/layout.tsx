@@ -18,7 +18,7 @@ export const metadata: Metadata = {
   description:
     'Explore Federal Reserve meeting minutes from 1967-1973 using AI-powered semantic search. Ask questions about the Nixon Shock, Bretton Woods collapse, and Fed policy decisions.',
   openGraph: {
-    title: 'Fed Minutes Chat — AI Search Over Historical Fed Meeting Minutes',
+    title: 'Fed Minutes Chat — AI Search, Fed Board of Governors (1967-1973)',
     description:
       'Semantic search over 30,000 pages of Federal Reserve meeting minutes (1967-1973). Explore the Nixon Shock, Bretton Woods, and more.',
     type: 'website',
@@ -27,7 +27,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Fed Minutes Chat — AI Search Over Historical Fed Meeting Minutes',
+    title: 'Fed Minutes Chat — AI Search, Fed Board of Governors (1967-1973)',
     description:
       'Semantic search over 30,000 pages of Federal Reserve meeting minutes (1967-1973). Explore the Nixon Shock, Bretton Woods, and more.',
   },
