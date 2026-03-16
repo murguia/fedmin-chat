@@ -84,25 +84,50 @@ function CitationCard({
           <div className="bg-slate-900/50 rounded p-3 text-sm text-slate-300 font-mono leading-relaxed">
             {citation.text_excerpt}
           </div>
-          <button
-            onClick={handleCopy}
-            className="mt-2 text-xs text-slate-400 hover:text-emerald-400 transition-colors flex items-center gap-1"
-          >
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
+          <div className="mt-2 flex items-center gap-4">
+            <button
+              onClick={handleCopy}
+              className="text-xs text-slate-400 hover:text-emerald-400 transition-colors flex items-center gap-1"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-              />
-            </svg>
-            {copied ? 'Copied!' : 'Copy excerpt'}
-          </button>
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                />
+              </svg>
+              {copied ? 'Copied!' : 'Copy excerpt'}
+            </button>
+            {citation.meeting_id && (
+              <a
+                href={`https://files.crisesnotes.com/${citation.meeting_id.replace('.txt', '.pdf')}?ref=fedmin-chat`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-slate-400 hover:text-emerald-400 transition-colors flex items-center gap-1"
+              >
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                  />
+                </svg>
+                View original PDF
+              </a>
+            )}
+          </div>
         </div>
       )}
     </div>
