@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Fed Minutes Chat — AI Search, Fed Board of Governors (1967-1973)',
     description:
-      'Semantic search over 30,000 pages of Federal Reserve meeting minutes (1967-1973). Explore the Nixon Shock, Bretton Woods, and more.',
+      'Semantic search over 30,000 pages of never-before-public Fed Board of Governors minutes (1967-1973). Explore the Nixon Shock, Bretton Woods, and more.',
     type: 'website',
     url: 'https://fedmin-chat.vercel.app',
     images: [{ url: '/og-image.png', width: 1200, height: 630 }],
@@ -29,7 +29,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Fed Minutes Chat — AI Search, Fed Board of Governors (1967-1973)',
     description:
-      'Semantic search over 30,000 pages of Federal Reserve meeting minutes (1967-1973). Explore the Nixon Shock, Bretton Woods, and more.',
+      'Semantic search over 30,000 pages of never-before-public Fed Board of Governors minutes (1967-1973). Explore the Nixon Shock, Bretton Woods, and more.',
   },
 };
 
