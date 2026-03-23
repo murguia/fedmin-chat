@@ -10,7 +10,9 @@
     "fetch-data": "tsx scripts/fetch-fedminutes.ts",
     "setup-pinecone": "tsx scripts/setup-pinecone.ts",
     "ingest": "tsx scripts/ingest.ts",
-    "ingest:dry-run": "tsx scripts/ingest.ts --dry-run"
+    "ingest:dry-run": "tsx scripts/ingest.ts --dry-run",
+    "test": "jest",
+    "test:watch": "jest --watch"
   },
   "dependencies": {
     "@pinecone-database/pinecone": "^7.0.0",
@@ -22,13 +24,16 @@
     "tiktoken": "^1.0.22"
   },
   "devDependencies": {
+    "@types/jest": "^30.0.0",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "eslint": "^8",
     "eslint-config-next": "14.2.35",
+    "jest": "^30.3.0",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
+    "ts-jest": "^29.4.6",
     "tsx": "^4.21.0",
     "typescript": "^5"
   }
