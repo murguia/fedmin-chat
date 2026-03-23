@@ -55,7 +55,15 @@ export default function Home() {
             . Built with Next.js, OpenAI, and Pinecone.
           </p>
           <p className="mt-2 flex items-center justify-center gap-2">
-            Built by Raul Murguia
+            Built by{' '}
+              <a
+                href="https://murguia.org"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-emerald-500 hover:text-emerald-400 transition-colors"
+              >
+                Raul Murguia
+              </a>
             <a
               href="https://github.com/murguia/fedmin-chat"
               target="_blank"
