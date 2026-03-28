@@ -55,6 +55,17 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) to start asking questions.
 
+## Testing
+
+```bash
+npm test              # Run all tests
+npm run test:watch    # Run tests in watch mode
+```
+
+18 tests across 2 suites:
+- **Rate limiter** — request allowance, IP isolation, window reset, remaining count
+- **Text chunker** — sentence boundary splitting, token limits, overlap, content preservation
+
 ## Companion Project
 
 This project is the consumer-facing counterpart to [FedMinutes](https://github.com/murguia/FedMinutes), a Python research backend with Jupyter notebooks for deep analysis and report generation.
