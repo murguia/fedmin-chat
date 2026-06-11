@@ -21,7 +21,8 @@ export function getIndex() {
 export async function queryPinecone(
   embedding: number[],
   topK: number = 5,
-  minScore: number = 0.7
+  minScore: number = 0.7,
+  filter?: Record<string, unknown>
 ): Promise<PineconeMatch[]> {
   const index = getIndex();
 
@@ -29,6 +30,7 @@ export async function queryPinecone(
     vector: embedding,
     topK,
     includeMetadata: true,
+    ...(filter ? { filter } : {}),
   });
 
   return (results.matches || [])

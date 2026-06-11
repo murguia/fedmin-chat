@@ -1,8 +1,44 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { generateEmbedding, generateChatResponse } from '@/lib/openai';
-import { queryPinecone } from '@/lib/pinecone';
+import { runAgentLoop } from '@/lib/agent';
 import { rateLimit } from '@/lib/rate-limit';
-import type { ChatRequest, ChatResponse, Citation } from '@/types';
+import type { ChatRequest, ChatResponse, Citation, PineconeMatch } from '@/types';
+
+const MAX_CITATIONS = 8;
+
+// Collapse the matches retrieved across all of the agent's searches into a
+// deduped, score-ranked citation list (same chunk can surface in several searches).
+function buildCitations(matches: PineconeMatch[]): Citation[] {
+  const byId = new Map<string, PineconeMatch>();
+  for (const m of matches) {
+    const existing = byId.get(m.id);
+    if (!existing || m.score > existing.score) byId.set(m.id, m);
+  }
+
+  return Array.from(byId.values())
+    .sort((a, b) => b.score - a.score)
+    .slice(0, MAX_CITATIONS)
+    .map((match) => {
+      const { metadata, score } = match;
+      let attendees: string[] = [];
+      try {
+        attendees = JSON.parse(metadata.attendees || '[]');
+      } catch {
+        attendees = [];
+      }
+
+      return {
+        meeting_id: metadata.meeting_id,
+        date: metadata.date,
+        meeting_type: metadata.meeting_type,
+        attendees,
+        relevance_score: score,
+        text_excerpt:
+          metadata.text.length > 300
+            ? metadata.text.substring(0, 300) + '...'
+            : metadata.text,
+      };
+    });
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -38,59 +74,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate embedding for the query
-    const queryEmbedding = await generateEmbedding(query);
-
-    // Search Pinecone for relevant chunks
-    const matches = await queryPinecone(queryEmbedding, 5, 0.7);
-
-    if (matches.length === 0) {
-      return NextResponse.json({
-        response:
-          "I couldn't find any relevant information in the Federal Reserve meeting minutes for your query. Try rephrasing your question or asking about specific events, dates, or policy decisions from 1967-1973.",
-        citations: [],
-      } satisfies ChatResponse);
-    }
-
-    // Build context from matches
-    const context = matches
-      .map((match, i) => {
-        const { metadata } = match;
-        return `[Meeting ${i + 1}: ${metadata.date}, ${metadata.meeting_type}]
-${metadata.text}
----`;
-      })
-      .join('\n\n');
-
-    // Generate LLM response
-    const response = await generateChatResponse(query, context);
-
-    // Build citations
-    const citations: Citation[] = matches.map((match) => {
-      const { metadata, score } = match;
-      let attendees: string[] = [];
-      try {
-        attendees = JSON.parse(metadata.attendees || '[]');
-      } catch {
-        attendees = [];
-      }
-
-      return {
-        meeting_id: metadata.meeting_id,
-        date: metadata.date,
-        meeting_type: metadata.meeting_type,
-        attendees,
-        relevance_score: score,
-        text_excerpt:
-          metadata.text.length > 300
-            ? metadata.text.substring(0, 300) + '...'
-            : metadata.text,
-      };
-    });
+    // Run the tool-calling research agent: it plans and issues searches over the
+    // minutes, then synthesizes a grounded answer from what it retrieved.
+    const { response, matches } = await runAgentLoop(query);
 
     return NextResponse.json({
       response,
-      citations,
+      citations: buildCitations(matches),
     } satisfies ChatResponse);
   } catch (error) {
     console.error('Chat API error:', error);
