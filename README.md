@@ -2,21 +2,26 @@
 
 A conversational AI interface for exploring Federal Reserve meeting minutes from 1967–1973. Ask natural language questions about monetary policy, economic conditions, and Fed decision-making during one of the most pivotal eras in modern economic history — covering the collapse of Bretton Woods, the Nixon Shock, rising inflation, and the shift from fixed to floating exchange rates.
 
-Unlike traditional keyword search, this app uses **semantic search** (vector embeddings) to find relevant passages by meaning, then synthesizes answers with citations using GPT-4o.
+Unlike traditional keyword search, this app uses **semantic search** (vector embeddings) to find relevant passages by meaning. Rather than a single fixed lookup, a **GPT-4o tool-calling agent** plans its own retrieval — issuing multiple searches and drilling into specific meetings — before synthesizing a cited answer.
 
 ## How It Works
 
+The chat endpoint runs an agentic research loop instead of a one-shot retrieve-then-answer pass:
+
 1. **User asks a question** in natural language
-2. **Semantic search** converts the query to a vector embedding and finds the most relevant meeting excerpts in Pinecone
-3. **GPT-4o** synthesizes an answer grounded in the retrieved excerpts
-4. **Citations** are displayed with meeting dates, attendees, relevance scores, and expandable source text
+2. **The agent plans its retrieval.** GPT-4o is given two tools and decides how to use them:
+   - `search_minutes` — semantic search across all minutes
+   - `search_within_meeting` — semantic search scoped to a single meeting, for drilling into the most relevant one
+3. **The loop runs** (`lib/agent.ts`): the model can call the tools repeatedly — comparing topics, gathering more context, or narrowing in — reading each result before deciding its next step. A search is forced on the first turn so every answer is grounded in retrieved text.
+4. **GPT-4o synthesizes** an answer grounded only in the excerpts the agent retrieved.
+5. **Citations** are deduped across all of the agent's searches, ranked by relevance, and displayed with meeting dates, attendees, relevance scores, and expandable source text.
 
 ## Tech Stack
 
 - **Frontend:** Next.js 14 (App Router), React 18, TypeScript, Tailwind CSS
 - **Embeddings:** OpenAI text-embedding-ada-002 (1536 dimensions)
 - **Vector DB:** Pinecone (serverless, cosine similarity)
-- **LLM:** GPT-4o with grounding constraints to prevent hallucination
+- **LLM:** GPT-4o tool-calling agent with grounding constraints to prevent hallucination
 - **Deployment:** Vercel
 
 ## Data Pipeline
@@ -62,7 +67,8 @@ npm test              # Run all tests
 npm run test:watch    # Run tests in watch mode
 ```
 
-18 tests across 2 suites:
+26 tests across 3 suites:
+- **Agent loop** — forced grounding on the first turn, multi-step tool calls, meeting drill-down, step-budget fallback, and malformed-response handling (OpenAI and Pinecone mocked)
 - **Rate limiter** — request allowance, IP isolation, window reset, remaining count
 - **Text chunker** — sentence boundary splitting, token limits, overlap, content preservation
 
