@@ -12,7 +12,8 @@
     "ingest": "tsx scripts/ingest.ts",
     "ingest:dry-run": "tsx scripts/ingest.ts --dry-run",
     "test": "jest",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "eval": "tsx evals/retrieval-eval.ts"
   },
   "dependencies": {
     "@pinecone-database/pinecone": "^7.0.0",

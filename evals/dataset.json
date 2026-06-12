@@ -1,0 +1,43 @@
+{
+  "description": "Golden set for retrieval-accuracy evaluation. Each case names a question plus what a correct retrieval should surface: expected_keywords (substrings that should appear in the retrieved excerpts) and/or expected_meetings (meeting_ids that should appear in the ranked results). This is a seed set to be expanded with corpus knowledge (the companion FedMinutes project is well suited to generating verified labels).",
+  "cases": [
+    {
+      "id": "nixon-shock-convertibility",
+      "question": "Why did the Board suspend the dollar's convertibility into gold in August 1971?",
+      "expected_keywords": ["convertibility", "gold"],
+      "expected_meetings": ["NT50808.txt"],
+      "notes": "Aug 15 1971 Board meeting on the Nixon Shock. Verified present via live query."
+    },
+    {
+      "id": "dollar-floating-1971",
+      "question": "How did Governors view the dollar floating against foreign currencies after August 1971?",
+      "expected_keywords": ["floating"],
+      "expected_meetings": ["NT50808.txt"],
+      "notes": "Governor Brimmer's observation on the float. Verified present via live query."
+    },
+    {
+      "id": "gold-cover-repeal",
+      "question": "What did the Board think about removing the 25 percent gold cover against Federal Reserve notes?",
+      "expected_keywords": ["gold cover"],
+      "notes": "Gold-cover repeal debate (1967-68). Vocabulary verified present via live query."
+    },
+    {
+      "id": "bis-gold-loan",
+      "question": "What was the gold loan agreement with the Bank for International Settlements?",
+      "expected_keywords": ["Bank for International Settlements"],
+      "notes": "BIS gold loan item. Vocabulary verified present via live query."
+    },
+    {
+      "id": "savings-and-loan-1973",
+      "question": "Did the Board consider assistance to the savings and loan industry in 1973?",
+      "expected_keywords": ["savings and loan"],
+      "notes": "Domain-driven probe (see README data attribution). Unverified — a genuine retrieval test."
+    },
+    {
+      "id": "emergency-lending-1967",
+      "question": "Was there discussion of the Federal Reserve's emergency lending powers in 1967?",
+      "expected_keywords": ["emergency"],
+      "notes": "Domain-driven probe (see README data attribution). Unverified — a genuine retrieval test."
+    }
+  ]
+}
