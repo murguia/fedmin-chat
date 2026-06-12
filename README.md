@@ -72,6 +72,26 @@ npm run test:watch    # Run tests in watch mode
 - **Rate limiter** — request allowance, IP isolation, window reset, remaining count
 - **Text chunker** — sentence boundary splitting, token limits, overlap, content preservation
 
+## Evaluation
+
+Retrieval quality is measured independently of generation with an eval harness (`evals/retrieval-eval.ts`). It runs a golden set of questions through the retrieval primitive (embedding → Pinecone search) and scores whether the passages a correct answer depends on are surfaced. Requires `OPENAI_API_KEY` and `PINECONE_API_KEY`, since it queries the live index.
+
+```bash
+npm run eval                    # default top-k 5
+npm run eval -- --top-k 10      # widen retrieval
+npm run eval -- --threshold 0.8 # gate strictness
+```
+
+Each case in `evals/dataset.json` declares what a correct retrieval should surface:
+- **`expected_keywords`** — substrings that should appear in the retrieved excerpts
+- **`expected_meetings`** — meeting IDs that should appear in the ranked results
+
+The harness reports **keyword recall**, **meeting hit-rate**, and **MRR**, and exits non-zero when keyword recall falls below the threshold (so it can gate CI).
+
+This decoupling makes retrieval regressions visible on their own terms. For example, at the production default of top-k=5, single-shot retrieval misses the canonical Nixon Shock meeting (`NT50808.txt`) for a "convertibility"-phrased question — it ranks 6–10 and only appears once `--top-k 10` is used. This is exactly the gap the agent loop closes: its multi-step search and meeting drill-down recover the right source where a single fixed lookup does not.
+
+The dataset is a seed set meant to be expanded; the companion [FedMinutes](https://github.com/murguia/FedMinutes) project is well suited to generating verified question → meeting labels.
+
 ## Companion Project
 
 This project is the consumer-facing counterpart to [FedMinutes](https://github.com/murguia/FedMinutes), a Python research backend with Jupyter notebooks for deep analysis and report generation.
