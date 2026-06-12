@@ -16,6 +16,22 @@ The chat endpoint runs an agentic research loop instead of a one-shot retrieve-t
 4. **GPT-4o synthesizes** an answer grounded only in the excerpts the agent retrieved.
 5. **Citations** are deduped across all of the agent's searches, ranked by relevance, and displayed with meeting dates, attendees, relevance scores, and expandable source text.
 
+## Architecture
+
+```mermaid
+flowchart TD
+    U[User question] --> API[API route<br/>rate limit + validation]
+    API --> LOOP{{GPT-4o agent loop<br/>lib/agent.ts}}
+    LOOP -->|tool call| T[Tools — lib/tools.ts<br/>search_minutes /<br/>search_within_meeting]
+    T --> EMB[OpenAI embeddings]
+    EMB --> PC[(Pinecone<br/>vector search)]
+    PC -->|excerpts| LOOP
+    LOOP -->|grounded answer + deduped citations| UI[Chat UI]
+    EVAL[Eval harness<br/>evals/retrieval-eval.ts] -.->|hit-rate · MRR| PC
+```
+
+The agent loop is the core: GPT-4o decides *when* and *how* to retrieve, calling the tools repeatedly until it has enough grounded evidence to answer. The eval harness exercises the same retrieval path independently of generation, so retrieval quality can be measured and regressions caught on their own terms.
+
 ## Tech Stack
 
 - **Frontend:** Next.js 14 (App Router), React 18, TypeScript, Tailwind CSS
