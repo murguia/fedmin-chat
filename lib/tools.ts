@@ -1,65 +1,7 @@
-import OpenAI from 'openai';
-import { generateEmbedding } from './openai';
-import { queryPinecone } from './pinecone';
+import { tool } from '@langchain/core/tools';
+import { z } from 'zod';
+import { retrieve, retrieveAndRerank } from './retrieve';
 import type { PineconeMatch } from '@/types';
-
-// Tool schemas exposed to the model for the agentic research loop.
-export const toolDefinitions: OpenAI.Chat.Completions.ChatCompletionTool[] = [
-  {
-    type: 'function',
-    function: {
-      name: 'search_minutes',
-      description:
-        'Semantic search over Federal Reserve Board meeting minutes (1967-1973). ' +
-        'Returns the most relevant excerpts, each tagged with its meeting_id, date, ' +
-        'type, and relevance score. Call this to find passages about a topic, event, ' +
-        'person, or policy decision. Issue several searches with different queries ' +
-        'when a question spans multiple topics or time periods, or when results are thin.',
-      parameters: {
-        type: 'object',
-        properties: {
-          query: {
-            type: 'string',
-            description: 'A focused natural-language query describing what to find.',
-          },
-          top_k: {
-            type: 'integer',
-            description: 'Number of excerpts to return (1-10). Default 5.',
-          },
-        },
-        required: ['query'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'search_within_meeting',
-      description:
-        'Semantic search scoped to a single meeting, identified by its meeting_id ' +
-        '(e.g. "NT50000.txt"). Use this to drill into a specific meeting you found ' +
-        'relevant via search_minutes and pull more detail from it.',
-      parameters: {
-        type: 'object',
-        properties: {
-          meeting_id: {
-            type: 'string',
-            description: 'The meeting_id to search within, e.g. "NT50000.txt".',
-          },
-          query: {
-            type: 'string',
-            description: 'A focused natural-language query describing what to find.',
-          },
-          top_k: {
-            type: 'integer',
-            description: 'Number of excerpts to return (1-10). Default 5.',
-          },
-        },
-        required: ['meeting_id', 'query'],
-      },
-    },
-  },
-];
 
 function clampTopK(value: unknown): number {
   const n = Number(value);
@@ -82,35 +24,67 @@ ${md.text}`;
     .join('\n\n---\n\n');
 }
 
-// Executes a tool call and returns both a model-facing string and the raw
-// matches, which the agent loop accumulates into user-facing citations.
-export async function executeTool(
-  name: string,
-  args: Record<string, unknown>
-): Promise<{ content: string; matches: PineconeMatch[] }> {
-  switch (name) {
-    case 'search_minutes': {
-      const query = String(args.query ?? '').trim();
-      if (!query) return { content: 'Error: query is required.', matches: [] };
-      const embedding = await generateEmbedding(query);
-      const matches = await queryPinecone(embedding, clampTopK(args.top_k), 0.7);
-      return { content: formatMatches(matches), matches };
-    }
-    case 'search_within_meeting': {
-      const meetingId = String(args.meeting_id ?? '').trim();
-      const query = String(args.query ?? '').trim();
-      if (!meetingId || !query) {
-        return { content: 'Error: meeting_id and query are required.', matches: [] };
-      }
-      const embedding = await generateEmbedding(query);
-      // Lower minScore: within one meeting the best available passages are still
-      // worth surfacing even if absolute relevance is modest.
-      const matches = await queryPinecone(embedding, clampTopK(args.top_k), 0.5, {
-        meeting_id: { $eq: meetingId },
-      });
-      return { content: formatMatches(matches), matches };
-    }
-    default:
-      return { content: `Unknown tool: ${name}`, matches: [] };
+// Tools return [content, artifact]: the content string goes to the model, while
+// the artifact (raw matches) rides along on the ToolMessage so the agent loop
+// can collect it into user-facing citations without re-parsing the text.
+
+export const searchMinutes = tool(
+  async ({ query, top_k }): Promise<[string, PineconeMatch[]]> => {
+    const matches = await retrieveAndRerank(query, clampTopK(top_k), 0.7);
+    return [formatMatches(matches), matches];
+  },
+  {
+    name: 'search_minutes',
+    description:
+      'Semantic search over Federal Reserve Board meeting minutes (1967-1973). ' +
+      'Returns the most relevant excerpts, each tagged with its meeting_id, date, ' +
+      'type, and relevance score. Call this to find passages about a topic, event, ' +
+      'person, or policy decision. Issue several searches with different queries ' +
+      'when a question spans multiple topics or time periods, or when results are thin.',
+    schema: z.object({
+      query: z
+        .string()
+        .describe('A focused natural-language query describing what to find.'),
+      top_k: z
+        .number()
+        .int()
+        .optional()
+        .describe('Number of excerpts to return (1-10). Default 5.'),
+    }),
+    responseFormat: 'content_and_artifact',
   }
-}
+);
+
+export const searchWithinMeeting = tool(
+  async ({ meeting_id, query, top_k }): Promise<[string, PineconeMatch[]]> => {
+    // Lower minScore: within one meeting the best available passages are still
+    // worth surfacing even if absolute relevance is modest.
+    const matches = await retrieve(query, clampTopK(top_k), 0.5, {
+      meeting_id: { $eq: meeting_id },
+    });
+    return [formatMatches(matches), matches];
+  },
+  {
+    name: 'search_within_meeting',
+    description:
+      'Semantic search scoped to a single meeting, identified by its meeting_id ' +
+      '(e.g. "NT50000.txt"). Use this to drill into a specific meeting you found ' +
+      'relevant via search_minutes and pull more detail from it.',
+    schema: z.object({
+      meeting_id: z
+        .string()
+        .describe('The meeting_id to search within, e.g. "NT50000.txt".'),
+      query: z
+        .string()
+        .describe('A focused natural-language query describing what to find.'),
+      top_k: z
+        .number()
+        .int()
+        .optional()
+        .describe('Number of excerpts to return (1-10). Default 5.'),
+    }),
+    responseFormat: 'content_and_artifact',
+  }
+);
+
+export const tools = [searchMinutes, searchWithinMeeting];

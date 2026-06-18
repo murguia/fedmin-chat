@@ -1,10 +1,13 @@
 /**
  * Retrieval-accuracy eval harness
  *
- * Runs a golden set of questions through the retrieval primitive
- * (embedding -> Pinecone search) and scores how well it surfaces the
- * passages a correct answer depends on. This evaluates retrieval in
- * isolation from generation, the way recall@k / MRR are meant to be read.
+ * Runs a golden set of questions through retrieval and scores how well it
+ * surfaces the passages a correct answer depends on — evaluated in isolation
+ * from generation, the way recall@k / MRR are meant to be read.
+ *
+ * Compares two strategies side by side:
+ *   - single   : one embedding -> Pinecone search
+ *   - rerank   : multi-query recall + LLM reranking (retrieve-and-rerank)
  *
  * Requires OPENAI_API_KEY and PINECONE_API_KEY (queries the live index).
  *
@@ -18,8 +21,8 @@
 import 'dotenv/config';
 import * as fs from 'fs';
 import * as path from 'path';
-import { generateEmbedding } from '../lib/openai';
-import { queryPinecone } from '../lib/pinecone';
+import { retrieve, retrieveAndRerank } from '../lib/retrieve';
+import type { PineconeMatch } from '../types';
 
 interface EvalCase {
   id: string;
@@ -29,13 +32,18 @@ interface EvalCase {
   notes?: string;
 }
 
-interface CaseResult {
-  id: string;
+interface Scored {
   keywordRecall: number | null; // null when the case has no keyword labels
   missingKeywords: string[];
   meetingHit: boolean | null; // null when the case has no meeting labels
   meetingReciprocalRank: number; // 0 when missed or unlabeled
   topScore: number;
+}
+
+interface CaseResult {
+  id: string;
+  single: Scored;
+  multi: Scored;
 }
 
 function parseArgs(argv: string[]) {
@@ -66,16 +74,10 @@ function rankedMeetingIds(meetingIds: string[]): string[] {
   return ordered;
 }
 
-async function evaluateCase(c: EvalCase, topK: number): Promise<CaseResult> {
-  const embedding = await generateEmbedding(c.question);
-  // minScore 0: we want the full ranked top-k to judge retrieval, not a
-  // production-style relevance cutoff.
-  const matches = await queryPinecone(embedding, topK, 0);
-
+function score(c: EvalCase, matches: PineconeMatch[]): Scored {
   const retrievedText = matches.map((m) => m.metadata.text).join('\n').toLowerCase();
   const topScore = matches.length > 0 ? matches[0].score : 0;
 
-  // Keyword coverage: fraction of expected substrings present in retrieved text.
   let keywordRecall: number | null = null;
   let missingKeywords: string[] = [];
   if (c.expected_keywords && c.expected_keywords.length > 0) {
@@ -87,7 +89,6 @@ async function evaluateCase(c: EvalCase, topK: number): Promise<CaseResult> {
       c.expected_keywords.length;
   }
 
-  // Meeting hit + reciprocal rank of the first expected meeting.
   let meetingHit: boolean | null = null;
   let meetingReciprocalRank = 0;
   if (c.expected_meetings && c.expected_meetings.length > 0) {
@@ -98,60 +99,76 @@ async function evaluateCase(c: EvalCase, topK: number): Promise<CaseResult> {
     meetingReciprocalRank = rank === -1 ? 0 : 1 / (rank + 1);
   }
 
-  return {
-    id: c.id,
-    keywordRecall,
-    missingKeywords,
-    meetingHit,
-    meetingReciprocalRank,
-    topScore,
-  };
+  return { keywordRecall, missingKeywords, meetingHit, meetingReciprocalRank, topScore };
+}
+
+async function evaluateCase(c: EvalCase, topK: number): Promise<CaseResult> {
+  // minScore 0: we want the full ranked top-k to judge retrieval, not a
+  // production-style relevance cutoff.
+  const [single, multi] = await Promise.all([
+    retrieve(c.question, topK, 0),
+    retrieveAndRerank(c.question, topK, 0),
+  ]);
+  return { id: c.id, single: score(c, single), multi: score(c, multi) };
 }
 
 function pct(n: number): string {
   return `${(n * 100).toFixed(0)}%`;
 }
 
+function meetingCell(s: Scored): string {
+  if (s.meetingHit === null) return ' — ';
+  return s.meetingHit ? 'hit ' : 'MISS';
+}
+
+function aggregate(results: CaseResult[], pick: (r: CaseResult) => Scored) {
+  const scored = results.map(pick);
+  const kwCases = scored.filter((s) => s.keywordRecall !== null);
+  const meetingCases = scored.filter((s) => s.meetingHit !== null);
+  return {
+    keywordRecall:
+      kwCases.reduce((sum, s) => sum + (s.keywordRecall ?? 0), 0) / (kwCases.length || 1),
+    meetingHitRate:
+      meetingCases.filter((s) => s.meetingHit).length / (meetingCases.length || 1),
+    mrr:
+      meetingCases.reduce((sum, s) => sum + s.meetingReciprocalRank, 0) /
+      (meetingCases.length || 1),
+    kwCount: kwCases.length,
+    meetingCount: meetingCases.length,
+  };
+}
+
 function printReport(results: CaseResult[], topK: number, threshold: number): boolean {
-  console.log(`\nRetrieval eval — top-k=${topK}, ${results.length} cases\n`);
+  console.log(`\nRetrieval eval — top-k=${topK}, ${results.length} cases  (single -> rerank)\n`);
 
   const idWidth = Math.max(...results.map((r) => r.id.length), 4);
-  const header = `${'case'.padEnd(idWidth)}  kw-recall  meeting   top-score`;
+  const header = `${'case'.padEnd(idWidth)}  meeting        kw-recall`;
   console.log(header);
   console.log('-'.repeat(header.length));
 
   for (const r of results) {
-    const kw = r.keywordRecall === null ? '   —   ' : pct(r.keywordRecall).padStart(7);
-    const meeting =
-      r.meetingHit === null ? '  —  ' : r.meetingHit ? ' hit ' : 'MISS ';
-    const flag = r.missingKeywords.length > 0 ? `  (missing: ${r.missingKeywords.join(', ')})` : '';
-    console.log(
-      `${r.id.padEnd(idWidth)}  ${kw}    ${meeting}    ${r.topScore.toFixed(3)}${flag}`
-    );
+    const meeting = `${meetingCell(r.single)} -> ${meetingCell(r.multi)}`;
+    const kw =
+      r.single.keywordRecall === null
+        ? '   —   '
+        : `${pct(r.single.keywordRecall)} -> ${pct(r.multi.keywordRecall ?? 0)}`;
+    console.log(`${r.id.padEnd(idWidth)}  ${meeting}    ${kw}`);
   }
 
-  // Aggregates, each over the cases that carry the relevant label.
-  const kwCases = results.filter((r) => r.keywordRecall !== null);
-  const meetingCases = results.filter((r) => r.meetingHit !== null);
+  const s = aggregate(results, (r) => r.single);
+  const m = aggregate(results, (r) => r.multi);
 
-  const meanKeywordRecall =
-    kwCases.reduce((s, r) => s + (r.keywordRecall ?? 0), 0) / (kwCases.length || 1);
-  const meetingHitRate =
-    meetingCases.filter((r) => r.meetingHit).length / (meetingCases.length || 1);
-  const mrr =
-    meetingCases.reduce((s, r) => s + r.meetingReciprocalRank, 0) /
-    (meetingCases.length || 1);
-
-  console.log('\nSummary');
-  console.log(`  keyword recall (mean):  ${pct(meanKeywordRecall)}  over ${kwCases.length} cases`);
-  if (meetingCases.length > 0) {
-    console.log(`  meeting hit-rate:       ${pct(meetingHitRate)}  over ${meetingCases.length} cases`);
-    console.log(`  meeting MRR:            ${mrr.toFixed(3)}`);
+  console.log('\nSummary                  single -> rerank');
+  console.log(`  keyword recall (mean):  ${pct(s.keywordRecall)} -> ${pct(m.keywordRecall)}   over ${m.kwCount} cases`);
+  if (m.meetingCount > 0) {
+    console.log(`  meeting hit-rate:       ${pct(s.meetingHitRate)} -> ${pct(m.meetingHitRate)}   over ${m.meetingCount} cases`);
+    console.log(`  meeting MRR:            ${s.mrr.toFixed(3)} -> ${m.mrr.toFixed(3)}`);
   }
 
-  const passed = meanKeywordRecall >= threshold;
+  // Gate on the production retrieval path (rerank keyword recall).
+  const passed = m.keywordRecall >= threshold;
   console.log(
-    `\nGate: keyword recall ${pct(meanKeywordRecall)} ${passed ? '>=' : '<'} ${pct(threshold)} threshold -> ${passed ? 'PASS' : 'FAIL'}\n`
+    `\nGate: rerank keyword recall ${pct(m.keywordRecall)} ${passed ? '>=' : '<'} ${pct(threshold)} threshold -> ${passed ? 'PASS' : 'FAIL'}\n`
   );
   return passed;
 }
@@ -164,7 +181,7 @@ async function main() {
 
   console.log(`Running ${cases.length} cases from ${path.relative(process.cwd(), dataPath)}...`);
 
-  // Sequential to stay well within API rate limits; the golden set is small.
+  // Sequential across cases to stay well within API rate limits.
   const results: CaseResult[] = [];
   for (const c of cases) {
     results.push(await evaluateCase(c, topK));

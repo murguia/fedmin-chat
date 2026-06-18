@@ -9,10 +9,10 @@ Unlike traditional keyword search, this app uses **semantic search** (vector emb
 The chat endpoint runs an agentic research loop instead of a one-shot retrieve-then-answer pass:
 
 1. **User asks a question** in natural language
-2. **The agent plans its retrieval.** GPT-4o is given two tools and decides how to use them:
-   - `search_minutes` — semantic search across all minutes
+2. **The agent plans its retrieval.** A GPT-4o agent built on **LangGraph** is given two tools and decides how to use them:
+   - `search_minutes` — multi-query retrieval with LLM reranking across all minutes
    - `search_within_meeting` — semantic search scoped to a single meeting, for drilling into the most relevant one
-3. **The loop runs** (`lib/agent.ts`): the model can call the tools repeatedly — comparing topics, gathering more context, or narrowing in — reading each result before deciding its next step. A search is forced on the first turn so every answer is grounded in retrieved text.
+3. **The loop runs** (`lib/agent.ts`): a LangGraph state machine cycles between the model and the tools — the model can search repeatedly, comparing topics or narrowing in, reading each result before deciding its next step. A search is forced on the first turn so every answer is grounded in retrieved text.
 4. **GPT-4o synthesizes** an answer grounded only in the excerpts the agent retrieved.
 5. **Citations** are deduped across all of the agent's searches, ranked by relevance, and displayed with meeting dates, attendees, relevance scores, and expandable source text.
 
@@ -21,23 +21,27 @@ The chat endpoint runs an agentic research loop instead of a one-shot retrieve-t
 ```mermaid
 flowchart TD
     U[User question] --> API[API route<br/>rate limit + validation]
-    API --> LOOP{{GPT-4o agent loop<br/>lib/agent.ts}}
-    LOOP -->|tool call| T[Tools — lib/tools.ts<br/>search_minutes /<br/>search_within_meeting]
-    T --> EMB[OpenAI embeddings]
-    EMB --> PC[(Pinecone<br/>vector search)]
-    PC -->|excerpts| LOOP
+    API --> LOOP{{LangGraph agent<br/>GPT-4o · lib/agent.ts}}
+    LOOP -->|tool call| T[Tools — lib/tools.ts]
+    T --> R[Retrieve-and-rerank<br/>lib/retrieve.ts]
+    R -->|multi-query embeddings| PC[(Pinecone<br/>vector search)]
+    PC -->|candidate pool| R
+    R -->|reranked excerpts| LOOP
     LOOP -->|grounded answer + deduped citations| UI[Chat UI]
-    EVAL[Eval harness<br/>evals/retrieval-eval.ts] -.->|hit-rate · MRR| PC
+    EVAL[Eval harness<br/>evals/retrieval-eval.ts] -.->|hit-rate · MRR| R
+    LOOP -.->|traces| LS[LangSmith]
 ```
 
-The agent loop is the core: GPT-4o decides *when* and *how* to retrieve, calling the tools repeatedly until it has enough grounded evidence to answer. The eval harness exercises the same retrieval path independently of generation, so retrieval quality can be measured and regressions caught on their own terms.
+The LangGraph agent is the core: GPT-4o decides *when* and *how* to retrieve, calling the tools repeatedly until it has enough grounded evidence to answer. Each `search_minutes` call runs **retrieve-and-rerank** — multi-query expansion for recall, then LLM reranking for precision. The eval harness exercises the same retrieval path independently of generation, so retrieval quality can be measured and regressions caught on their own terms, and runs are traced to LangSmith when enabled.
 
 ## Tech Stack
 
 - **Frontend:** Next.js 14 (App Router), React 18, TypeScript, Tailwind CSS
+- **Agent orchestration:** LangGraph (stateful GPT-4o tool-calling loop)
+- **Retrieval:** multi-query expansion + LLM reranking (LangChain), with grounding constraints to prevent hallucination
 - **Embeddings:** OpenAI text-embedding-ada-002 (1536 dimensions)
 - **Vector DB:** Pinecone (serverless, cosine similarity)
-- **LLM:** GPT-4o tool-calling agent with grounding constraints to prevent hallucination
+- **Observability:** LangSmith tracing (optional, env-gated)
 - **Deployment:** Vercel
 
 ## Data Pipeline
@@ -83,14 +87,14 @@ npm test              # Run all tests
 npm run test:watch    # Run tests in watch mode
 ```
 
-26 tests across 3 suites:
-- **Agent loop** — forced grounding on the first turn, multi-step tool calls, meeting drill-down, step-budget fallback, and malformed-response handling (OpenAI and Pinecone mocked)
+25 tests across 3 suites:
+- **Agent loop** — forced grounding on the first turn, multi-step tool calls, meeting drill-down, tool-turn-budget fallback, and tool-failure recovery (the chat model and retrieval are mocked; the real LangGraph state machine runs)
 - **Rate limiter** — request allowance, IP isolation, window reset, remaining count
 - **Text chunker** — sentence boundary splitting, token limits, overlap, content preservation
 
 ## Evaluation
 
-Retrieval quality is measured independently of generation with an eval harness (`evals/retrieval-eval.ts`). It runs a golden set of questions through the retrieval primitive (embedding → Pinecone search) and scores whether the passages a correct answer depends on are surfaced. Requires `OPENAI_API_KEY` and `PINECONE_API_KEY`, since it queries the live index.
+Retrieval quality is measured independently of generation with an eval harness (`evals/retrieval-eval.ts`). It runs a golden set of questions and, for each, scores whether the passages a correct answer depends on are surfaced — comparing two strategies **side by side**: plain single-query search vs. retrieve-and-rerank (the production path). Requires `OPENAI_API_KEY` and `PINECONE_API_KEY`, since it queries the live index.
 
 ```bash
 npm run eval                    # default top-k 5
@@ -102,9 +106,14 @@ Each case in `evals/dataset.json` declares what a correct retrieval should surfa
 - **`expected_keywords`** — substrings that should appear in the retrieved excerpts
 - **`expected_meetings`** — meeting IDs that should appear in the ranked results
 
-The harness reports **keyword recall**, **meeting hit-rate**, and **MRR**, and exits non-zero when keyword recall falls below the threshold (so it can gate CI).
+The harness reports **keyword recall**, **meeting hit-rate**, and **MRR** for both strategies, and exits non-zero when keyword recall falls below the threshold (so it can gate CI).
 
-This decoupling makes retrieval regressions visible on their own terms. For example, at the production default of top-k=5, single-shot retrieval misses the canonical Nixon Shock meeting (`NT50808.txt`) for a "convertibility"-phrased question — it ranks 6–10 and only appears once `--top-k 10` is used. This is exactly the gap the agent loop closes: its multi-step search and meeting drill-down recover the right source where a single fixed lookup does not.
+This harness drove a real retrieval improvement. At top-k=5, single-query search **misses** the canonical Nixon Shock meeting (`NT50808.txt`) for a "convertibility"-phrased question — the corpus has many meetings discussing gold convertibility, and the discriminating signal ("August 1971") is temporal, which embeddings capture poorly. Multi-query expansion alone didn't fix it (the eval proved that); the fix was **LLM reranking** over a broad recall pool, which promotes the actual August 1971 announcement to the top. Measured on the labeled cases:
+
+| Strategy | meeting hit-rate | MRR |
+|---|---|---|
+| single-query | 50% | 0.50 |
+| retrieve-and-rerank | **100%** | **1.00** |
 
 The dataset is a seed set meant to be expanded; the companion [FedMinutes](https://github.com/murguia/FedMinutes) project is well suited to generating verified question → meeting labels.
 
