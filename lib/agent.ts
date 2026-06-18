@@ -1,9 +1,18 @@
-import OpenAI from 'openai';
-import { getOpenAIClient } from './openai';
-import { toolDefinitions, executeTool } from './tools';
+import { StateGraph, MessagesAnnotation, START, END } from '@langchain/langgraph';
+import { ToolNode } from '@langchain/langgraph/prebuilt';
+import { ChatOpenAI } from '@langchain/openai';
+import {
+  SystemMessage,
+  HumanMessage,
+  isAIMessage,
+  isToolMessage,
+  type BaseMessage,
+} from '@langchain/core/messages';
+import { tools } from './tools';
 import type { PineconeMatch } from '@/types';
 
-const MAX_STEPS = 4;
+// Max tool-calling turns before the agent is forced to answer with what it has.
+const MAX_TOOL_TURNS = 4;
 
 const AGENT_SYSTEM_PROMPT = `You are a research assistant exploring Federal Reserve Board
 meeting minutes from 1967-1973. You answer questions by searching the minutes with the
@@ -29,77 +38,93 @@ WHEN YOU HAVE ENOUGH EVIDENCE, write the answer:
 - Follow with detailed prose using specific dates, attendees, and decisions from the
   excerpts.`;
 
+let baseModel: ChatOpenAI | null = null;
+
+function getModel(): ChatOpenAI {
+  if (!baseModel) {
+    baseModel = new ChatOpenAI({ model: 'gpt-4o', temperature: 0.3, maxTokens: 1500 });
+  }
+  return baseModel;
+}
+
+function countToolTurns(messages: BaseMessage[]): number {
+  return messages.filter((m) => isAIMessage(m) && (m.tool_calls?.length ?? 0) > 0).length;
+}
+
+// Agent node: calls the model, varying tool availability by how far the loop has run.
+async function callModel(state: typeof MessagesAnnotation.State) {
+  const { messages } = state;
+  const toolTurns = countToolTurns(messages);
+  const model = getModel();
+
+  let response;
+  if (toolTurns === 0) {
+    // Force a search on the very first turn so every answer is grounded.
+    response = await model.bindTools(tools, { tool_choice: 'any' }).invoke(messages);
+  } else if (toolTurns >= MAX_TOOL_TURNS) {
+    // Step budget exhausted: force a final textual answer with no further tools.
+    response = await model.invoke(messages);
+  } else {
+    response = await model.bindTools(tools).invoke(messages);
+  }
+
+  return { messages: [response] };
+}
+
+// Continue into the tools node while the model is still requesting tool calls.
+function shouldContinue(state: typeof MessagesAnnotation.State) {
+  const last = state.messages[state.messages.length - 1];
+  if (isAIMessage(last) && (last.tool_calls?.length ?? 0) > 0) return 'tools';
+  return END;
+}
+
+const graph = new StateGraph(MessagesAnnotation)
+  .addNode('agent', callModel)
+  .addNode('tools', new ToolNode(tools))
+  .addEdge(START, 'agent')
+  .addConditionalEdges('agent', shouldContinue, ['tools', END])
+  .addEdge('tools', 'agent')
+  .compile();
+
+// Pull the raw matches that tools attached as ToolMessage artifacts, so they can
+// become user-facing citations.
+function collectMatches(messages: BaseMessage[]): PineconeMatch[] {
+  const out: PineconeMatch[] = [];
+  for (const m of messages) {
+    if (isToolMessage(m) && Array.isArray(m.artifact)) {
+      out.push(...(m.artifact as PineconeMatch[]));
+    }
+  }
+  return out;
+}
+
+function messageText(content: BaseMessage['content']): string {
+  if (typeof content === 'string') return content;
+  // Array content (rare for these responses): concatenate text parts.
+  return content
+    .map((part) => (typeof part === 'string' ? part : 'text' in part ? part.text : ''))
+    .join('');
+}
+
 /**
- * Runs a tool-calling research loop: the model plans and issues searches against the
- * minutes, reads the results, and decides when it has enough evidence to answer.
- * Returns the final answer plus every match retrieved along the way (for citations).
+ * Runs the LangGraph research agent: the model plans and issues searches against
+ * the minutes (forced on the first turn for grounding), reads the results, and
+ * decides when it has enough evidence to answer — falling back to a forced answer
+ * once the tool-turn budget is spent. Returns the final answer plus every match
+ * retrieved along the way (for citations).
  */
 export async function runAgentLoop(
   query: string
 ): Promise<{ response: string; matches: PineconeMatch[] }> {
-  const openai = getOpenAIClient();
-  const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
-    { role: 'system', content: AGENT_SYSTEM_PROMPT },
-    { role: 'user', content: query },
-  ];
-
-  const collectedMatches: PineconeMatch[] = [];
-
-  for (let step = 0; step < MAX_STEPS; step++) {
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o',
-      messages,
-      tools: toolDefinitions,
-      // Force at least one search on the first turn so answers are always grounded.
-      tool_choice: step === 0 ? 'required' : 'auto',
-      temperature: 0.3,
-      max_tokens: 1500,
-    });
-
-    const choice = completion.choices[0].message;
-    messages.push(choice);
-
-    if (!choice.tool_calls || choice.tool_calls.length === 0) {
-      return {
-        response: choice.content || 'Unable to generate response.',
-        matches: collectedMatches,
-      };
-    }
-
-    for (const call of choice.tool_calls) {
-      if (call.type !== 'function') continue;
-      let args: Record<string, unknown> = {};
-      try {
-        args = JSON.parse(call.function.arguments || '{}');
-      } catch {
-        args = {};
-      }
-      const result = await executeTool(call.function.name, args);
-      collectedMatches.push(...result.matches);
-      messages.push({
-        role: 'tool',
-        tool_call_id: call.id,
-        content: result.content,
-      });
-    }
-  }
-
-  // Step budget exhausted: ask for a final answer with no further tool calls.
-  const final = await openai.chat.completions.create({
-    model: 'gpt-4o',
-    messages: [
-      ...messages,
-      {
-        role: 'user',
-        content: 'Provide your final answer now, based only on the excerpts gathered so far.',
-      },
-    ],
-    temperature: 0.3,
-    max_tokens: 1500,
+  const result = await graph.invoke({
+    messages: [new SystemMessage(AGENT_SYSTEM_PROMPT), new HumanMessage(query)],
   });
 
+  const messages = result.messages;
+  const last = messages[messages.length - 1];
+
   return {
-    response: final.choices[0].message.content || 'Unable to generate response.',
-    matches: collectedMatches,
+    response: messageText(last.content) || 'Unable to generate response.',
+    matches: collectMatches(messages),
   };
 }
