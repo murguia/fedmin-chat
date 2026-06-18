@@ -57,8 +57,9 @@ function AboutModal({ onClose }: { onClose: () => void }) {
                   1
                 </span>
                 <p>
-                  Your question is converted into a vector embedding that
-                  captures its semantic meaning.
+                  An AI research agent plans its own search &mdash; rather than a
+                  single lookup, it runs several searches and can drill into
+                  specific meetings to gather evidence.
                 </p>
               </div>
               <div className="flex gap-3">
@@ -66,8 +67,10 @@ function AboutModal({ onClose }: { onClose: () => void }) {
                   2
                 </span>
                 <p>
-                  The embedding is matched against 61,000+ document chunks
-                  in a vector database to find the most relevant meeting excerpts.
+                  Each search rewrites your question into multiple phrasings and
+                  reranks the results against 61,000+ document chunks, so the most
+                  relevant passages surface even when the minutes use different
+                  wording.
                 </p>
               </div>
               <div className="flex gap-3">
@@ -75,8 +78,9 @@ function AboutModal({ onClose }: { onClose: () => void }) {
                   3
                 </span>
                 <p>
-                  GPT-4o synthesizes an answer grounded in those excerpts,
-                  with citations you can verify.
+                  GPT-4o is required to search before answering, then synthesizes
+                  a response grounded only in the retrieved excerpts &mdash; with
+                  citations you can verify.
                 </p>
               </div>
             </div>
