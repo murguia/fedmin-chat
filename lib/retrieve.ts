@@ -2,7 +2,7 @@ import { ChatOpenAI } from '@langchain/openai';
 import { SystemMessage, HumanMessage } from '@langchain/core/messages';
 import { traceable } from 'langsmith/traceable';
 import { generateEmbedding } from './openai';
-import { queryPinecone } from './pinecone';
+import { vectorSearch, type VectorFilter } from './vector-search';
 import type { PineconeMatch } from '@/types';
 
 // Embeddings stay on the native path (generateEmbedding) so query vectors use
@@ -30,10 +30,10 @@ export const retrieve = traceable(
     query: string,
     topK = 5,
     minScore = 0.7,
-    filter?: Record<string, unknown>
+    filter?: VectorFilter
   ): Promise<PineconeMatch[]> {
     const embedding = await generateEmbedding(query);
-    return queryPinecone(embedding, topK, minScore, filter);
+    return vectorSearch(embedding, topK, minScore, filter);
   },
   { name: 'retrieve' }
 );

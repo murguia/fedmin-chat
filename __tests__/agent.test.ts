@@ -131,9 +131,9 @@ describe('runAgentLoop (LangGraph)', () => {
     const res = await runAgentLoop('q');
 
     expect(res.matches).toHaveLength(2);
-    // scoped search uses a lower minScore (0.5) and a meeting_id filter
+    // scoped search uses a lower minScore (0.5) and a normalized meeting filter
     expect(mockRetrieve).toHaveBeenCalledWith('convertibility', 5, 0.5, {
-      meeting_id: { $eq: 'NT50808.txt' },
+      meetingId: 'NT50808.txt',
     });
   });
 
