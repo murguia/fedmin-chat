@@ -22,10 +22,13 @@ async function main() {
   await pool.query('CREATE EXTENSION IF NOT EXISTS vector');
 
   console.log('Creating chunks table...');
+  // halfvec (16-bit) instead of vector (32-bit) halves embedding storage so the
+  // full corpus fits a 500MB free tier. Precision loss is negligible for cosine
+  // retrieval, and reranking cleans it up downstream.
   await pool.query(`
     CREATE TABLE IF NOT EXISTS chunks (
       id                text PRIMARY KEY,
-      embedding         vector(1536),
+      embedding         halfvec(1536),
       text              text NOT NULL,
       meeting_id        text NOT NULL,
       meeting_date      date,
@@ -38,10 +41,9 @@ async function main() {
     )
   `);
 
-  console.log('Creating HNSW index on embedding (cosine)...');
-  await pool.query(
-    'CREATE INDEX IF NOT EXISTS chunks_embedding_idx ON chunks USING hnsw (embedding vector_cosine_ops)'
-  );
+  // No ANN index on the embedding: at ~61k rows exact (sequential-scan) cosine
+  // search is fast enough, and an HNSW/ivfflat index would blow the free-tier
+  // storage budget. Add one (e.g. hnsw … halfvec_cosine_ops) on a larger tier.
 
   console.log('Creating btree index on meeting_date...');
   await pool.query(

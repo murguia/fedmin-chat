@@ -60,10 +60,10 @@ export async function queryVectors(
            to_char(meeting_date, 'YYYY-MM-DD') AS date,
            meeting_type, attendees, topics, decisions_summary,
            chunk_index, total_chunks,
-           1 - (embedding <=> $1::vector) AS score
+           1 - (embedding <=> $1::halfvec) AS score
     FROM chunks
     ${where}
-    ORDER BY embedding <=> $1::vector
+    ORDER BY embedding <=> $1::halfvec
     LIMIT $${limitIdx}`;
 
   const { rows } = await getPool().query(sql, params);

@@ -183,7 +183,7 @@ class PostgresManager implements VectorSink {
         v.metadata.chunk_index,
         v.metadata.total_chunks
       );
-      return `($${b + 1},$${b + 2}::vector,$${b + 3},$${b + 4},$${b + 5}::date,$${b + 6},$${b + 7}::jsonb,$${b + 8}::jsonb,$${b + 9},$${b + 10},$${b + 11})`;
+      return `($${b + 1},$${b + 2}::halfvec,$${b + 3},$${b + 4},$${b + 5}::date,$${b + 6},$${b + 7}::jsonb,$${b + 8}::jsonb,$${b + 9},$${b + 10},$${b + 11})`;
     });
 
     await this.pool.query(
