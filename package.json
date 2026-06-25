@@ -15,7 +15,8 @@
     "ingest:postgres": "VECTOR_BACKEND=postgres tsx scripts/ingest.ts",
     "test": "jest",
     "test:watch": "jest --watch",
-    "eval": "tsx evals/retrieval-eval.ts"
+    "eval": "tsx evals/retrieval-eval.ts",
+    "eval:answers": "tsx evals/answer-eval.ts"
   },
   "dependencies": {
     "@langchain/core": "^1.2.0",

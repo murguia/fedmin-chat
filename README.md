@@ -136,6 +136,16 @@ This harness drove the retrieval design. At top-k=5, single-query search **misse
 
 The date filter helps in proportion to how tightly it scopes (a month recovers the case; a whole year is still too broad — rerank catches the rest). The dataset is a seed set meant to be expanded; the companion [FedMinutes](https://github.com/murguia/FedMinutes) project is well suited to generating verified question → meeting labels.
 
+### Answer quality (faithfulness)
+
+Good retrieval is necessary but not sufficient — the generated answer also has to stay grounded. `evals/answer-eval.ts` runs the **full agent** on the golden questions and uses an LLM judge (gpt-4o) to score each answer for **faithfulness** (is every claim supported by the retrieved excerpts?) and **relevance** (does it answer the question?), gating on mean faithfulness.
+
+```bash
+VECTOR_BACKEND=postgres npm run eval:answers
+```
+
+On the current golden set the agent scores **5.0 / 5.0 faithfulness** with zero unsupported claims — its forced-search grounding holds. Two honest caveats: the judge is itself an LLM (a signal, not ground truth), and a perfect score partly reflects a small, curated set — so this is best read as a **regression guardrail** that would catch hallucination introduced by a future model or prompt change, not a proof of perfection. (Building it was itself a lesson: an early version truncated the excerpts shown to the judge and reported a false 2.4/5 — the eval was wrong, not the agent.)
+
 ## Companion Project
 
 This project is the consumer-facing counterpart to [FedMinutes](https://github.com/murguia/FedMinutes), a Python research backend with Jupyter notebooks for deep analysis and report generation.
