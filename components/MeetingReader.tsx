@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 
 interface MeetingData {
@@ -11,20 +11,37 @@ interface MeetingData {
   text: string;
 }
 
+// Locate the cited excerpt within the full meeting text. The excerpt is a prefix
+// of a chunk, and each chunk is a contiguous substring of the stitched full text,
+// so a direct match works; we strip the trailing ellipsis and shorten the needle
+// on the rare miss (e.g. truncation cut mid-token).
+function findPassage(full: string, excerpt: string): [number, number] | null {
+  let needle = excerpt.replace(/[.…]+\s*$/, '').trim();
+  while (needle.length >= 30) {
+    const i = full.indexOf(needle);
+    if (i !== -1) return [i, i + needle.length];
+    needle = needle.slice(0, Math.floor(needle.length * 0.8)).trim();
+  }
+  return null;
+}
+
 export default function MeetingReader({
   meetingId,
   date,
   meetingType,
+  highlight,
   onClose,
 }: {
   meetingId: string;
   date: string;
   meetingType: string;
+  highlight?: string;
   onClose: () => void;
 }) {
   const [data, setData] = useState<MeetingData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const markRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
@@ -62,10 +79,41 @@ export default function MeetingReader({
     };
   }, [meetingId]);
 
+  // Scroll the highlighted passage into view once the text has rendered.
+  useEffect(() => {
+    if (data && markRef.current) {
+      markRef.current.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+  }, [data]);
+
   const pdfUrl = `https://files.crisesnotes.com/${meetingId.replace(
     '.txt',
     '.pdf'
   )}?ref=fedmin-chat`;
+
+  // Render the full text, wrapping the cited excerpt in a highlight when found.
+  function renderBody() {
+    if (loading) return <span className="text-slate-500">Loading full meeting…</span>;
+    if (error) return <span className="text-slate-400">{error}</span>;
+    if (!data) return null;
+
+    const span = highlight ? findPassage(data.text, highlight) : null;
+    if (!span) return data.text;
+
+    const [s, e] = span;
+    return (
+      <>
+        {data.text.slice(0, s)}
+        <mark
+          ref={markRef}
+          className="bg-emerald-500/25 text-emerald-100 rounded px-0.5"
+        >
+          {data.text.slice(s, e)}
+        </mark>
+        {data.text.slice(e)}
+      </>
+    );
+  }
 
   return createPortal(
     <div className="fixed inset-0 z-[100] overflow-y-auto">
@@ -125,9 +173,7 @@ export default function MeetingReader({
           )}
 
           <div className="max-h-[60vh] overflow-y-auto bg-slate-900/50 rounded p-4 text-sm text-slate-300 font-mono leading-relaxed whitespace-pre-wrap">
-            {loading && <span className="text-slate-500">Loading full meeting…</span>}
-            {error && <span className="text-slate-400">{error}</span>}
-            {data && data.text}
+            {renderBody()}
           </div>
 
           <div className="mt-3">

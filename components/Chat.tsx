@@ -31,40 +31,59 @@ function CitationCard({
 
   return (
     <div className="border border-slate-700 rounded-lg overflow-hidden bg-slate-800/50">
-      <button
-        onClick={onToggle}
-        className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-slate-700/50 transition-colors"
-      >
-        <div className="flex items-center gap-3">
-          <span className="bg-emerald-600 text-white text-xs font-medium px-2 py-1 rounded">
-            [{index + 1}]
-          </span>
-          <span className="text-slate-200 font-medium">{citation.date}</span>
-          <span className="text-slate-400 text-sm capitalize">
-            {citation.meeting_type}
-          </span>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="text-emerald-400 text-sm">
-            {(citation.relevance_score * 100).toFixed(0)}% match
-          </span>
-          <svg
-            className={`w-5 h-5 text-slate-400 transition-transform ${
-              isExpanded ? 'rotate-180' : ''
-            }`}
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
+      <div className="flex items-stretch">
+        <button
+          onClick={onToggle}
+          className="flex-1 min-w-0 px-4 py-3 flex items-center justify-between text-left hover:bg-slate-700/50 transition-colors"
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="bg-emerald-600 text-white text-xs font-medium px-2 py-1 rounded shrink-0">
+              [{index + 1}]
+            </span>
+            <span className="text-slate-200 font-medium">{citation.date}</span>
+            <span className="text-slate-400 text-sm capitalize truncate">
+              {citation.meeting_type}
+            </span>
+          </div>
+          <div className="flex items-center gap-3 shrink-0">
+            <span className="text-emerald-400 text-sm">
+              {(citation.relevance_score * 100).toFixed(0)}% match
+            </span>
+            <svg
+              className={`w-5 h-5 text-slate-400 transition-transform ${
+                isExpanded ? 'rotate-180' : ''
+              }`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 9l-7 7-7-7"
+              />
+            </svg>
+          </div>
+        </button>
+        {citation.meeting_id && (
+          <button
+            onClick={() => setReaderOpen(true)}
+            title="Read the full meeting"
+            className="shrink-0 px-3 border-l border-slate-700 text-slate-400 hover:text-emerald-400 hover:bg-slate-700/50 transition-colors flex items-center gap-1.5 text-xs"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M19 9l-7 7-7-7"
-            />
-          </svg>
-        </div>
-      </button>
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+              />
+            </svg>
+            <span className="hidden sm:inline">Read</span>
+          </button>
+        )}
+      </div>
 
       {isExpanded && (
         <div className="px-4 pb-4 border-t border-slate-700">
@@ -107,27 +126,6 @@ function CitationCard({
               {copied ? 'Copied!' : 'Copy excerpt'}
             </button>
             {citation.meeting_id && (
-              <button
-                onClick={() => setReaderOpen(true)}
-                className="text-xs text-slate-400 hover:text-emerald-400 transition-colors flex items-center gap-1"
-              >
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
-                  />
-                </svg>
-                Read full meeting
-              </button>
-            )}
-            {citation.meeting_id && (
               <a
                 href={`https://files.crisesnotes.com/${citation.meeting_id.replace('.txt', '.pdf')}?ref=fedmin-chat`}
                 target="_blank"
@@ -159,6 +157,7 @@ function CitationCard({
           meetingId={citation.meeting_id}
           date={citation.date}
           meetingType={citation.meeting_type}
+          highlight={citation.text_excerpt}
           onClose={() => setReaderOpen(false)}
         />
       )}
