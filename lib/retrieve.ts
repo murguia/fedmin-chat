@@ -3,6 +3,7 @@ import { SystemMessage, HumanMessage } from '@langchain/core/messages';
 import { traceable } from 'langsmith/traceable';
 import { generateEmbedding } from './openai';
 import { vectorSearch, type VectorFilter } from './vector-search';
+import { extractDateRange } from './date-filter';
 import type { PineconeMatch } from '@/types';
 
 // Embeddings stay on the native path (generateEmbedding) so query vectors use
@@ -113,12 +114,25 @@ first, comma-separated (e.g. "3,0,7").`
   { name: 'rerank' }
 );
 
+// Union retrieval result lists by chunk id, keeping the highest score per chunk.
+function mergeByMaxScore(lists: PineconeMatch[][]): PineconeMatch[] {
+  const byId = new Map<string, PineconeMatch>();
+  for (const list of lists) {
+    for (const m of list) {
+      const existing = byId.get(m.id);
+      if (!existing || m.score > existing.score) byId.set(m.id, m);
+    }
+  }
+  return Array.from(byId.values());
+}
+
 /**
- * Retrieve-and-rerank with multi-query recall: expand the query into several
- * phrasings, retrieve a deep pool for each, union by chunk id, then LLM-rerank
- * the pool against the original question. Multi-query broadens recall; reranking
- * sharpens precision. Together they recover relevant passages that single-shot
- * top-k retrieval ranks just out of reach.
+ * Retrieve-and-rerank with multi-query recall and date-aware hybrid filtering:
+ * expand the query into several phrasings, extract any temporal constraint, then
+ * retrieve a deep pool for each phrasing (scoped to the date range when present),
+ * union by chunk id, and LLM-rerank against the original question. Multi-query
+ * broadens recall, the date filter sharpens precision on time-scoped questions,
+ * and reranking does the final ordering.
  */
 export const retrieveAndRerank = traceable(
   async function retrieveAndRerank(
@@ -126,21 +140,33 @@ export const retrieveAndRerank = traceable(
     topK = 5,
     minScore = 0.7
   ): Promise<PineconeMatch[]> {
-    const variations = await expandQuery(query);
+    // Date filtering only applies on the postgres backend (real date column);
+    // skip the extraction call entirely on the pinecone backend.
+    const wantDates =
+      (process.env.VECTOR_BACKEND || 'pinecone').toLowerCase() === 'postgres';
+
+    const [variations, dateRange] = await Promise.all([
+      expandQuery(query),
+      wantDates ? extractDateRange(query) : Promise.resolve(null),
+    ]);
+
     const fetchK = Math.max(topK * 2, 10);
-    const lists = await Promise.all(
-      variations.map((v) => retrieve(v, fetchK, minScore))
+    const filter: VectorFilter | undefined = dateRange ? { dateRange } : undefined;
+
+    let pool = mergeByMaxScore(
+      await Promise.all(variations.map((v) => retrieve(v, fetchK, minScore, filter)))
     );
 
-    const byId = new Map<string, PineconeMatch>();
-    for (const list of lists) {
-      for (const m of list) {
-        const existing = byId.get(m.id);
-        if (!existing || m.score > existing.score) byId.set(m.id, m);
-      }
+    // Filtered-with-fallback: a wrong or over-narrow date constraint shouldn't
+    // be able to starve retrieval. If the date-scoped pool is thin, retry
+    // unfiltered so there are always enough candidates to rerank.
+    if (filter && pool.length < topK) {
+      pool = mergeByMaxScore(
+        await Promise.all(variations.map((v) => retrieve(v, fetchK, minScore)))
+      );
     }
 
-    return rerank(query, Array.from(byId.values()), topK);
+    return rerank(query, pool, topK);
   },
   { name: 'retrieveAndRerank' }
 );

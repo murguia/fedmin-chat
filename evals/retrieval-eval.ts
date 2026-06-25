@@ -22,6 +22,7 @@ import 'dotenv/config';
 import * as fs from 'fs';
 import * as path from 'path';
 import { retrieve, retrieveAndRerank } from '../lib/retrieve';
+import { extractDateRange, type DateRange } from '../lib/date-filter';
 import type { PineconeMatch } from '../types';
 
 interface EvalCase {
@@ -42,8 +43,10 @@ interface Scored {
 
 interface CaseResult {
   id: string;
-  single: Scored;
-  multi: Scored;
+  single: Scored; // plain single-query
+  hybrid: Scored; // single-query + date filter
+  rerank: Scored; // full production path (multi-query + date + rerank)
+  dateRange: DateRange | null;
 }
 
 function parseArgs(argv: string[]) {
@@ -105,11 +108,20 @@ function score(c: EvalCase, matches: PineconeMatch[]): Scored {
 async function evaluateCase(c: EvalCase, topK: number): Promise<CaseResult> {
   // minScore 0: we want the full ranked top-k to judge retrieval, not a
   // production-style relevance cutoff.
-  const [single, multi] = await Promise.all([
-    retrieve(c.question, topK, 0),
-    retrieveAndRerank(c.question, topK, 0),
+  const dateRange = await extractDateRange(c.question);
+  const filter = dateRange ? { dateRange } : undefined;
+  const [single, hybrid, reranked] = await Promise.all([
+    retrieve(c.question, topK, 0), // plain semantic
+    retrieve(c.question, topK, 0, filter), // + date filter, isolates its effect
+    retrieveAndRerank(c.question, topK, 0), // full production path
   ]);
-  return { id: c.id, single: score(c, single), multi: score(c, multi) };
+  return {
+    id: c.id,
+    single: score(c, single),
+    hybrid: score(c, hybrid),
+    rerank: score(c, reranked),
+    dateRange,
+  };
 }
 
 function pct(n: number): string {
@@ -139,31 +151,29 @@ function aggregate(results: CaseResult[], pick: (r: CaseResult) => Scored) {
 }
 
 function printReport(results: CaseResult[], topK: number, threshold: number): boolean {
-  console.log(`\nRetrieval eval — top-k=${topK}, ${results.length} cases  (single -> rerank)\n`);
+  console.log(`\nRetrieval eval — top-k=${topK}, ${results.length} cases  (meeting hit: single -> +date -> rerank)\n`);
 
   const idWidth = Math.max(...results.map((r) => r.id.length), 4);
-  const header = `${'case'.padEnd(idWidth)}  meeting        kw-recall`;
+  const header = `${'case'.padEnd(idWidth)}  single  +date  rerank   date range`;
   console.log(header);
   console.log('-'.repeat(header.length));
 
   for (const r of results) {
-    const meeting = `${meetingCell(r.single)} -> ${meetingCell(r.multi)}`;
-    const kw =
-      r.single.keywordRecall === null
-        ? '   —   '
-        : `${pct(r.single.keywordRecall)} -> ${pct(r.multi.keywordRecall ?? 0)}`;
-    console.log(`${r.id.padEnd(idWidth)}  ${meeting}    ${kw}`);
+    const cells = `${meetingCell(r.single)}    ${meetingCell(r.hybrid)}   ${meetingCell(r.rerank)}`;
+    const dateTag = r.dateRange ? `   ${r.dateRange.start}..${r.dateRange.end}` : '';
+    console.log(`${r.id.padEnd(idWidth)}  ${cells}${dateTag}`);
   }
 
   const s = aggregate(results, (r) => r.single);
-  const m = aggregate(results, (r) => r.multi);
+  const h = aggregate(results, (r) => r.hybrid);
+  const m = aggregate(results, (r) => r.rerank);
 
-  console.log('\nSummary                  single -> rerank');
-  console.log(`  keyword recall (mean):  ${pct(s.keywordRecall)} -> ${pct(m.keywordRecall)}   over ${m.kwCount} cases`);
+  console.log('\nSummary                  single -> +date -> rerank');
   if (m.meetingCount > 0) {
-    console.log(`  meeting hit-rate:       ${pct(s.meetingHitRate)} -> ${pct(m.meetingHitRate)}   over ${m.meetingCount} cases`);
-    console.log(`  meeting MRR:            ${s.mrr.toFixed(3)} -> ${m.mrr.toFixed(3)}`);
+    console.log(`  meeting hit-rate:  ${pct(s.meetingHitRate)} -> ${pct(h.meetingHitRate)} -> ${pct(m.meetingHitRate)}   over ${m.meetingCount} cases`);
+    console.log(`  meeting MRR:       ${s.mrr.toFixed(3)} -> ${h.mrr.toFixed(3)} -> ${m.mrr.toFixed(3)}`);
   }
+  console.log(`  keyword recall:    ${pct(m.keywordRecall)} (rerank)   over ${m.kwCount} cases`);
 
   // Gate on the production retrieval path (rerank keyword recall).
   const passed = m.keywordRecall >= threshold;
