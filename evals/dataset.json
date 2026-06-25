@@ -38,6 +38,13 @@
       "question": "Was there discussion of the Federal Reserve's emergency lending powers in 1967?",
       "expected_keywords": ["emergency"],
       "notes": "Domain-driven probe (see README data attribution). Unverified — a genuine retrieval test."
+    },
+    {
+      "id": "gold-convertibility-1971",
+      "question": "What did the Board decide about gold convertibility during 1971?",
+      "expected_keywords": ["convertibility", "gold"],
+      "expected_meetings": ["NT50808.txt"],
+      "notes": "Year-scoped (1971). Tests date-aware hybrid: the 1971 filter should surface NT50808 even on single-query, where the unfiltered query competes with gold-convertibility discussions from other years."
     }
   ]
 }

@@ -9,8 +9,10 @@
     "lint": "next lint",
     "fetch-data": "tsx scripts/fetch-fedminutes.ts",
     "setup-pinecone": "tsx scripts/setup-pinecone.ts",
+    "setup-postgres": "tsx scripts/setup-postgres.ts",
     "ingest": "tsx scripts/ingest.ts",
     "ingest:dry-run": "tsx scripts/ingest.ts --dry-run",
+    "ingest:postgres": "VECTOR_BACKEND=postgres tsx scripts/ingest.ts",
     "test": "jest",
     "test:watch": "jest --watch",
     "eval": "tsx evals/retrieval-eval.ts"
@@ -25,6 +27,7 @@
     "langsmith": "^0.7.10",
     "next": "14.2.35",
     "openai": "^6.21.0",
+    "pg": "^8.22.0",
     "react": "^18",
     "react-dom": "^18",
     "tiktoken": "^1.0.22",
@@ -33,6 +36,7 @@
   "devDependencies": {
     "@types/jest": "^30.0.0",
     "@types/node": "^20",
+    "@types/pg": "^8.20.0",
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "eslint": "^8",

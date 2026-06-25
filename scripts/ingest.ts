@@ -12,8 +12,10 @@ import 'dotenv/config';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Pinecone } from '@pinecone-database/pinecone';
+import { Pool } from 'pg';
 import OpenAI from 'openai';
 import { TextChunker } from '../lib/text-chunker';
+import { poolConfig } from '../lib/db';
 
 // Types - matches FedMinutes output schema
 interface RawMeetingData {
@@ -88,7 +90,7 @@ class EmbeddingGenerator {
 }
 
 // Pinecone Manager
-class PineconeManager {
+class PineconeManager implements VectorSink {
   private client: Pinecone | null = null;
   private indexName: string;
   private dryRun: boolean;
@@ -129,6 +131,79 @@ class PineconeManager {
   }
 }
 
+type Vector = { id: string; values: number[]; metadata: ChunkMetadata };
+
+interface VectorSink {
+  init(): Promise<void>;
+  upsert(vectors: Vector[]): Promise<void>;
+  end?(): Promise<void>;
+}
+
+// Postgres + pgvector sink (parallel to PineconeManager, same interface)
+class PostgresManager implements VectorSink {
+  private pool: Pool | null = null;
+  private dryRun: boolean;
+
+  constructor(dryRun: boolean = false) {
+    this.dryRun = dryRun;
+  }
+
+  async init() {
+    if (this.dryRun) {
+      console.log('[DRY RUN] Skipping Postgres initialization');
+      return;
+    }
+    if (!process.env.DATABASE_URL) {
+      throw new Error('DATABASE_URL not set (required for VECTOR_BACKEND=postgres)');
+    }
+    this.pool = new Pool(poolConfig());
+  }
+
+  async upsert(vectors: Vector[]) {
+    if (this.dryRun) {
+      console.log(`  [DRY RUN] Would upsert ${vectors.length} rows to Postgres`);
+      return;
+    }
+    if (!this.pool) throw new Error('Postgres pool not initialized');
+
+    const COLS = 11;
+    const params: unknown[] = [];
+    const rows = vectors.map((v, r) => {
+      const b = r * COLS;
+      const date = /^\d{4}-\d{2}-\d{2}$/.test(v.metadata.date) ? v.metadata.date : null;
+      params.push(
+        v.id,
+        `[${v.values.join(',')}]`,
+        v.metadata.text,
+        v.metadata.meeting_id,
+        date,
+        v.metadata.meeting_type,
+        v.metadata.attendees,
+        v.metadata.topics,
+        v.metadata.decisions_summary,
+        v.metadata.chunk_index,
+        v.metadata.total_chunks
+      );
+      return `($${b + 1},$${b + 2}::halfvec,$${b + 3},$${b + 4},$${b + 5}::date,$${b + 6},$${b + 7}::jsonb,$${b + 8}::jsonb,$${b + 9},$${b + 10},$${b + 11})`;
+    });
+
+    await this.pool.query(
+      `INSERT INTO chunks (id, embedding, text, meeting_id, meeting_date, meeting_type, attendees, topics, decisions_summary, chunk_index, total_chunks)
+       VALUES ${rows.join(',')}
+       ON CONFLICT (id) DO UPDATE SET
+         embedding = EXCLUDED.embedding,
+         text = EXCLUDED.text,
+         meeting_date = EXCLUDED.meeting_date`,
+      params
+    );
+    console.log(`  Upserted ${vectors.length} rows to Postgres`);
+  }
+
+  async end() {
+    await this.pool?.end();
+  }
+}
+
 // Main ingestion function
 async function ingest(options: {
   dataPath: string;
@@ -162,12 +237,14 @@ async function ingest(options: {
   // Initialize components
   const chunker = new TextChunker();
   const embedder = new EmbeddingGenerator(dryRun);
-  const pinecone = new PineconeManager(
-    process.env.PINECONE_INDEX_NAME || 'fedmin-chat',
-    dryRun
-  );
+  const backend = (process.env.VECTOR_BACKEND || 'pinecone').toLowerCase();
+  const sink: VectorSink =
+    backend === 'postgres'
+      ? new PostgresManager(dryRun)
+      : new PineconeManager(process.env.PINECONE_INDEX_NAME || 'fedmin-chat', dryRun);
 
-  await pinecone.init();
+  console.log(`Vector backend: ${backend}`);
+  await sink.init();
 
   // Process meetings
   const allChunks: Chunk[] = [];
@@ -247,11 +324,12 @@ async function ingest(options: {
       metadata: chunk.metadata,
     }));
 
-    // Upsert to Pinecone
-    await pinecone.upsert(vectors);
+    // Upsert to the selected vector backend
+    await sink.upsert(vectors);
   }
 
   chunker.free();
+  await sink.end?.();
 
   console.log('');
   console.log('=== Ingestion Complete ===');

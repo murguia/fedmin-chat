@@ -60,7 +60,7 @@ export const searchWithinMeeting = tool(
     // Lower minScore: within one meeting the best available passages are still
     // worth surfacing even if absolute relevance is modest.
     const matches = await retrieve(query, clampTopK(top_k), 0.5, {
-      meeting_id: { $eq: meeting_id },
+      meetingId: meeting_id,
     });
     return [formatMatches(matches), matches];
   },
