@@ -39,6 +39,13 @@ flowchart TD
 
 The LangGraph agent is the core: GPT-4o decides *when* and *how* to retrieve, calling the tools repeatedly until it has enough grounded evidence to answer. Each `search_minutes` call runs **retrieve-and-rerank with date-aware filtering** — multi-query expansion for recall, a SQL `meeting_date` filter for time-scoped precision, then LLM reranking for final ordering. The vector store is **Postgres + pgvector** (Pinecone is also supported via a `VECTOR_BACKEND` flag), which is what makes the date filter possible — a real `date` column ranges cleanly where a vector store's metadata strings can't. The eval harness exercises the same retrieval path independently of generation, and runs are traced to LangSmith when enabled.
 
+### Design notes
+
+Deeper rationale for the significant decisions lives in [`docs/`](./docs):
+- [Architecture decisions](./docs/architecture-decisions.md) — ADR-style index of what was chosen and why
+- [Pinecone vs. Postgres + pgvector](./docs/pinecone-vs-pgvector.md) — the migration tradeoffs
+- [Switching LLMs / providers](./docs/llm-provider-switching.md) — the industry patterns
+
 ## Tech Stack
 
 - **Frontend:** Next.js 14 (App Router), React 18, TypeScript, Tailwind CSS
