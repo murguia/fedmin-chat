@@ -67,7 +67,8 @@ function AboutModal({ onClose }: { onClose: () => void }) {
                   2
                 </span>
                 <p>
-                  Each search rewrites your question into multiple phrasings and
+                  Each search rewrites your question into multiple phrasings,
+                  narrows to the relevant time period when you mention one, and
                   reranks the results against thousands of document excerpts, so the
                   most relevant passages surface even when the minutes use different
                   wording.
@@ -80,7 +81,7 @@ function AboutModal({ onClose }: { onClose: () => void }) {
                 <p>
                   GPT-4o is required to search before answering, then synthesizes
                   a response grounded only in the retrieved excerpts &mdash; with
-                  citations you can verify.
+                  citations you can verify and open to read the full meeting.
                 </p>
               </div>
             </div>
