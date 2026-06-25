@@ -15,6 +15,7 @@ import { Pinecone } from '@pinecone-database/pinecone';
 import { Pool } from 'pg';
 import OpenAI from 'openai';
 import { TextChunker } from '../lib/text-chunker';
+import { poolConfig } from '../lib/db';
 
 // Types - matches FedMinutes output schema
 interface RawMeetingData {
@@ -155,7 +156,7 @@ class PostgresManager implements VectorSink {
     if (!process.env.DATABASE_URL) {
       throw new Error('DATABASE_URL not set (required for VECTOR_BACKEND=postgres)');
     }
-    this.pool = new Pool({ connectionString: process.env.DATABASE_URL });
+    this.pool = new Pool(poolConfig());
   }
 
   async upsert(vectors: Vector[]) {

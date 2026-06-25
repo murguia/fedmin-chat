@@ -9,6 +9,7 @@
 
 import 'dotenv/config';
 import { Pool } from 'pg';
+import { poolConfig } from '../lib/db';
 
 async function main() {
   if (!process.env.DATABASE_URL) {
@@ -16,7 +17,7 @@ async function main() {
     process.exit(1);
   }
 
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const pool = new Pool(poolConfig());
 
   console.log('Creating pgvector extension...');
   await pool.query('CREATE EXTENSION IF NOT EXISTS vector');

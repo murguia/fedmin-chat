@@ -6,13 +6,34 @@ import type { PineconeMatch, ChunkMetadata } from '@/types';
 // Neon -pooler host) so total connections stay bounded across instances.
 let pool: Pool | null = null;
 
+// Strip sslmode from the connection string. Newer pg treats sslmode=require as
+// verify-full, which rejects Supabase's pooler cert (not in Node's trust chain).
+// We force encrypt-without-verify via the ssl option below instead. Only the
+// query portion is parsed so the password isn't re-encoded.
+function cleanConnString(raw: string): string {
+  const qIdx = raw.indexOf('?');
+  if (qIdx === -1) return raw;
+  const base = raw.slice(0, qIdx);
+  const params = new URLSearchParams(raw.slice(qIdx + 1));
+  params.delete('sslmode');
+  params.delete('uselibpqcompat');
+  const qs = params.toString();
+  return qs ? `${base}?${qs}` : base;
+}
+
+// Pool config that works with Supabase's pooler: cleaned connection string +
+// encrypt-without-chain-verification. Shared by the app, ingest, and setup.
+export function poolConfig(extra: Record<string, unknown> = {}) {
+  return {
+    connectionString: cleanConnString(process.env.DATABASE_URL || ''),
+    ssl: { rejectUnauthorized: false },
+    ...extra,
+  };
+}
+
 export function getPool(): Pool {
   if (!pool) {
-    pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      max: 1,
-      idleTimeoutMillis: 10_000,
-    });
+    pool = new Pool(poolConfig({ max: 1, idleTimeoutMillis: 10_000 }));
   }
   return pool;
 }
