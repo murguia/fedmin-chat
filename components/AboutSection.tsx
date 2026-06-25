@@ -68,8 +68,8 @@ function AboutModal({ onClose }: { onClose: () => void }) {
                 </span>
                 <p>
                   Each search rewrites your question into multiple phrasings and
-                  reranks the results against 61,000+ document chunks, so the most
-                  relevant passages surface even when the minutes use different
+                  reranks the results against thousands of document excerpts, so the
+                  most relevant passages surface even when the minutes use different
                   wording.
                 </p>
               </div>
